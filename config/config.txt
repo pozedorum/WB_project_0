@@ -1,0 +1,2 @@
+DB_URL=postgres://test:test@postgres:5432/testdb
+KAFKA_BROKERS=localhost:9092
