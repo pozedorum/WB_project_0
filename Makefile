@@ -2,8 +2,8 @@
 
 # Запуск юнит-тестов (требует локальной БД)
 test-db-unit:
-	go test -v ./internal/db/... -tags=unit
-
+	go test -v ./internal/db/... 
+# -tags=unit
 # Запуск интеграционных тестов в Docker
 test-db-integration:
 	docker-compose up --build --exit-code-from dbtest

@@ -1,37 +1,60 @@
-package database
+package db
 
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 
 	"wb_project_0/internal/models"
 )
 
-
 func (db *Database) SaveOrder(ctx context.Context, order models.Order) error {
+	db.logger.Printf("Saving order %s", order.OrderUID)
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
+		db.logger.Printf("Begin transaction failed: %v", err)
 		return fmt.Errorf("begin transaction failed: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			db.logger.Printf("Rolling back transaction: %v", err)
+			tx.Rollback()
+		}
+	}()
+	if err = CheckFieldsOrder(order); err != nil {
+		db.logger.Printf("The order is invalid: %v", err)
+		return err
+	}
 
+	if err != nil {
+		db.logger.Printf("%v", err) // Non-valid structure
+	}
 	// Сохраняем основные данные заказа
+	db.logger.Printf("Inserting order %s", order.OrderUID)
 	if err := insertOrder(ctx, tx, order); err != nil {
+		db.logger.Printf("Inserting order failed %s", err)
 		return err
 	}
 
 	// Сохраняем доставку
+	db.logger.Printf("Inserting delivery %s", order.OrderUID)
 	if err := insertDelivery(ctx, tx, order); err != nil {
+		db.logger.Printf("Inserting delivery failed %s", err)
 		return err
 	}
 
 	// Сохраняем платежи
+	db.logger.Printf("Inserting payment %s", order.OrderUID)
 	if err := insertPayment(ctx, tx, order); err != nil {
+		db.logger.Printf("Inserting payment failed %s", err)
 		return err
 	}
 
 	// Сохраняем товары
+	db.logger.Printf("Inserting items %s", order.OrderUID)
 	if err := insertItems(ctx, tx, order); err != nil {
+		db.logger.Printf("Inserting items failed %s", err)
 		return err
 	}
 
@@ -113,21 +136,21 @@ func insertPayment(ctx context.Context, tx *sql.Tx, order models.Order) error {
 		delivery_cost = EXCLUDED.delivery_cost,
 		goods_total = EXCLUDED.goods_total,
 		custom_fee = EXCLUDED.custom_fee`
-	
-		_, err := tx.ExecContext(ctx, query,
-			order.OrderUID,
-			order.Payment.Transaction,
-			order.Payment.RequestID,
-			order.Payment.Currency,
-			order.Payment.Provider,
-			order.Payment.Amount,
-			order.Payment.PaymentDt,
-			order.Payment.Bank,
-			order.Payment.DeliveryCost,
-			order.Payment.GoodsTotal,
-			order.Payment.CustomFee,
-		)
-	
+
+	_, err := tx.ExecContext(ctx, query,
+		order.OrderUID,
+		order.Payment.Transaction,
+		order.Payment.RequestID,
+		order.Payment.Currency,
+		order.Payment.Provider,
+		order.Payment.Amount,
+		order.Payment.PaymentDt,
+		order.Payment.Bank,
+		order.Payment.DeliveryCost,
+		order.Payment.GoodsTotal,
+		order.Payment.CustomFee,
+	)
+
 	return err
 }
 
@@ -150,7 +173,7 @@ func insertItems(ctx context.Context, tx *sql.Tx, order models.Order) error {
 		_, err = tx.ExecContext(ctx, query,
 			order.OrderUID,
 			item.ChrtID,
-			item.TrackNumber
+			item.TrackNumber,
 			item.Price,
 			item.Rid,
 			item.Name,
@@ -168,11 +191,12 @@ func insertItems(ctx context.Context, tx *sql.Tx, order models.Order) error {
 	return err
 }
 
-
 func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error) {
 	var order models.Order
 
-	err := db.conn.QueryRowContext(ctx, "SELECT * FROM orders WHERE order_uid = $1",orderUID).Scan(
+	db.logger.Printf("Getting order %s", orderUID)
+
+	err := db.conn.QueryRowContext(ctx, "SELECT * FROM orders WHERE order_uid = $1", orderUID).Scan(
 		&order.OrderUID,
 		&order.TrackNumber,
 		&order.Entry,
@@ -183,14 +207,15 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 		&order.ShardKey,
 		&order.SmID,
 		&order.DateCreated,
-		&order.OofShard
+		&order.OofShard,
 	)
 	if err != nil {
+		db.logger.Printf("Error 1 getting order %s: %v", orderUID, err)
 		return nil, err
 	}
 
-	err := db.conn.QueryRowContext(ctx, "SELECT * FROM deliveries WHERE order_uid = $1", orderUID).Scan(
-		&order.Delivery.OrderUID,
+	err = db.conn.QueryRowContext(ctx, "SELECT * FROM deliveries WHERE order_uid = $1", orderUID).Scan(
+		&order.OrderUID,
 		&order.Delivery.Name,
 		&order.Delivery.Phone,
 		&order.Delivery.Zip,
@@ -200,12 +225,13 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 		&order.Delivery.Email,
 	)
 	if err != nil {
+		db.logger.Printf("Error 2 getting order %s: %v", orderUID, err)
 		return nil, err
 	}
 
 	err = db.conn.QueryRowContext(ctx,
 		"SELECT * FROM payments WHERE order_uid = $1", orderUID).Scan(
-		&order.Payment.OrderUID,
+		&order.OrderUID,
 		&order.Payment.Transaction,
 		&order.Payment.RequestID,
 		&order.Payment.Currency,
@@ -218,12 +244,14 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 		&order.Payment.CustomFee,
 	)
 	if err != nil {
+		db.logger.Printf("Error 3 getting order %s: %v", orderUID, err)
 		return nil, err
 	}
 
 	rows, err := db.conn.QueryContext(ctx,
-		"SELECT * FROM items WHERE order_uid = $1", orderUID)
+		"SELECT chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand, status FROM items WHERE order_uid = $1", orderUID)
 	if err != nil {
+		db.logger.Printf("Error 4 getting order %s: %v", orderUID, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -231,8 +259,6 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 	for rows.Next() {
 		var item models.Item
 		err := rows.Scan(
-			&item.ID,
-			&item.OrderUID,
 			&item.ChrtID,
 			&item.TrackNumber,
 			&item.Price,
@@ -246,30 +272,38 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 			&item.Status,
 		)
 		if err != nil {
+			db.logger.Printf("Error 5 getting order %s: %v", orderUID, err)
 			return nil, err
 		}
 		order.Items = append(order.Items, item)
 	}
 
+	db.logger.Printf("Successfully retrieved order %s", orderUID)
+	return &order, nil
 }
 
-
-
 func (db *Database) GetAllOrders(ctx context.Context) ([]models.Order, error) {
-	rows, err := db.conn.QueryContext(ctx,"SELECT order_uid FROM orders")
+
+	db.logger.Printf("Getting all orders")
+
+	rows, err := db.conn.QueryContext(ctx, "SELECT order_uid FROM orders")
 	if err != nil {
+		db.logger.Printf("Error getting order_uid: %v", err)
 		return nil, err
 	}
 
 	defer rows.Close()
-
+	var orders []models.Order
 	for rows.Next() {
-		var orderUid string
-		if err := db.conn.QueryContext(&orderUid); err != nil {
+		var orderUID string
+		if err := rows.Scan(&orderUID); err != nil {
+			db.logger.Printf("Error orderUID not found: %v", err)
 			return nil, err
 		}
 
-		if order, err := GetOrderByUID(ctx, orderUid); err != nil {
+		order, err := db.GetOrderByUID(ctx, orderUID)
+		if err != nil {
+			db.logger.Printf("Error not found order with orderUID %s: %v", orderUID, err)
 			return nil, err
 		}
 
@@ -278,4 +312,50 @@ func (db *Database) GetAllOrders(ctx context.Context) ([]models.Order, error) {
 
 	return orders, nil
 
+}
+
+func CheckFieldsOrder(order models.Order) error {
+	if order.OrderUID == "" {
+		return fmt.Errorf("order UID cannot be empty")
+	}
+	if order.TrackNumber == "" {
+		return fmt.Errorf("track number cannot be empty")
+	}
+	if len(order.Items) == 0 {
+		return fmt.Errorf("order must contain at least one item")
+	}
+
+	for _, item := range order.Items {
+		if err := CheckFieldsItem(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CheckFieldsDelivery(obj models.Delivery) error {
+	if obj.Name == "" || obj.Phone == "" || obj.Zip == "" || obj.City == "" ||
+		obj.Address == "" || obj.Region == "" || obj.Email == "" {
+		return errors.New("non-valid structure Delivery")
+	}
+	return nil
+}
+
+func CheckFieldsPayment(obj models.Payment) error {
+	if obj.Transaction == "" || obj.RequestID == "" || obj.Currency == "" ||
+		obj.Provider == "" || obj.Amount < 0 || obj.Bank == "" ||
+		obj.DeliveryCost < 0 || obj.GoodsTotal < 0 || obj.CustomFee < 0 {
+		return errors.New("non-valid structure Payment")
+	}
+	return nil
+}
+
+func CheckFieldsItem(obj models.Item) error {
+	if obj.ChrtID == 0 {
+		return fmt.Errorf("item chrt_id cannot be zero")
+	}
+	if obj.Price <= 0 {
+		return fmt.Errorf("item price must be positive")
+	}
+	return nil
 }

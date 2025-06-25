@@ -1,2 +1,2 @@
-DB_URL=postgres://test:test@postgres:5432/testdb
+DB_URL=postgres://test:test@postgres:5432/testdb?sslmode=disable
 KAFKA_BROKERS=localhost:9092

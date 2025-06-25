@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS orders (
     shardkey           VARCHAR(255) NOT NULL,
     sm_id              INTEGER NOT NULL,
     date_created       TIMESTAMPTZ NOT NULL,
-    oof_shard          VARCHAR(255) NOT NULL,
-    created_at         TIMESTAMPTZ DEFAULT NOW()
+    oof_shard          VARCHAR(255) NOT NULL
 );
 
 
@@ -44,7 +43,6 @@ CREATE TABLE IF NOT EXISTS payments (
 
 -- Таблица товаров
 CREATE TABLE IF NOT EXISTS items (
-    id           SERIAL PRIMARY KEY,
     order_uid    VARCHAR(255) NOT NULL REFERENCES orders(order_uid) ON DELETE CASCADE,
     chrt_id      BIGINT NOT NULL,
     track_number VARCHAR(255) NOT NULL,
@@ -56,7 +54,8 @@ CREATE TABLE IF NOT EXISTS items (
     total_price  INTEGER NOT NULL CHECK (total_price >= 0),
     nm_id        BIGINT NOT NULL,
     brand        VARCHAR(255) NOT NULL,
-    status       INTEGER NOT NULL
+    status       INTEGER NOT NULL,
+    PRIMARY KEY (order_uid, chrt_id)
 );
 
 -- Индексы для таблицы заказов

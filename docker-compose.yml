@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -10,6 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - ./migrations:/docker-entrypoint-initdb.d
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
@@ -25,11 +24,9 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: test
-      DB_PASSWORD: test
-      DB_NAME: testdb
-
+      DOCKER_ENV: "true"
+    volumes:
+      - .:/app  # Монтируем весь проект
+    working_dir: /app
 volumes:
   pgdata:
