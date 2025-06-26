@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # Основная БД
   postgres:
     image: postgres:15-alpine
     environment:
@@ -16,17 +19,22 @@ services:
       timeout: 5s
       retries: 5
 
-  dbtest:
+  # Основной сервис (бэкенд + фронтенд)
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.db-test
+      dockerfile: Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DOCKER_ENV: "true"
+      DB_URL: "postgres://test:test@postgres:5432/testdb?sslmode=disable"
+      USE_KAFKA_STUB: "true"
+    ports:
+      - "8081:8080"  # Пробрасываем внутренний 8080 на внешний 8081
     volumes:
-      - .:/app  # Монтируем весь проект
+      - .:/app
     working_dir: /app
+
 volumes:
   pgdata:

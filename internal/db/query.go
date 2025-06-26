@@ -10,7 +10,7 @@ import (
 )
 
 func (db *Database) SaveOrder(ctx context.Context, order models.Order) error {
-	db.logger.Printf("Saving order %s", order.OrderUID)
+	//db.logger.Printf("Saving order %s", order.OrderUID)
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
 		db.logger.Printf("Begin transaction failed: %v", err)
@@ -23,7 +23,7 @@ func (db *Database) SaveOrder(ctx context.Context, order models.Order) error {
 		}
 	}()
 	if err = CheckFieldsOrder(order); err != nil {
-		db.logger.Printf("The order is invalid: %v", err)
+		//db.logger.Printf("The order is invalid: %v", err)
 		return err
 	}
 
@@ -31,28 +31,28 @@ func (db *Database) SaveOrder(ctx context.Context, order models.Order) error {
 		db.logger.Printf("%v", err) // Non-valid structure
 	}
 	// Сохраняем основные данные заказа
-	db.logger.Printf("Inserting order %s", order.OrderUID)
+	//db.logger.Printf("Inserting order %s", order.OrderUID)
 	if err := insertOrder(ctx, tx, order); err != nil {
 		db.logger.Printf("Inserting order failed %s", err)
 		return err
 	}
 
 	// Сохраняем доставку
-	db.logger.Printf("Inserting delivery %s", order.OrderUID)
+	//db.logger.Printf("Inserting delivery %s", order.OrderUID)
 	if err := insertDelivery(ctx, tx, order); err != nil {
 		db.logger.Printf("Inserting delivery failed %s", err)
 		return err
 	}
 
 	// Сохраняем платежи
-	db.logger.Printf("Inserting payment %s", order.OrderUID)
+	//db.logger.Printf("Inserting payment %s", order.OrderUID)
 	if err := insertPayment(ctx, tx, order); err != nil {
 		db.logger.Printf("Inserting payment failed %s", err)
 		return err
 	}
 
 	// Сохраняем товары
-	db.logger.Printf("Inserting items %s", order.OrderUID)
+	//db.logger.Printf("Inserting items %s", order.OrderUID)
 	if err := insertItems(ctx, tx, order); err != nil {
 		db.logger.Printf("Inserting items failed %s", err)
 		return err
@@ -194,7 +194,7 @@ func insertItems(ctx context.Context, tx *sql.Tx, order models.Order) error {
 func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models.Order, error) {
 	var order models.Order
 
-	db.logger.Printf("Getting order %s", orderUID)
+	//db.logger.Printf("Getting order %s", orderUID)
 
 	err := db.conn.QueryRowContext(ctx, "SELECT * FROM orders WHERE order_uid = $1", orderUID).Scan(
 		&order.OrderUID,
@@ -278,7 +278,7 @@ func (db *Database) GetOrderByUID(ctx context.Context, orderUID string) (*models
 		order.Items = append(order.Items, item)
 	}
 
-	db.logger.Printf("Successfully retrieved order %s", orderUID)
+	//db.logger.Printf("Successfully retrieved order %s", orderUID)
 	return &order, nil
 }
 

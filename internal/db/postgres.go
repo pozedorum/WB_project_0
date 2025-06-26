@@ -12,15 +12,39 @@ import (
 )
 
 type Database struct {
-	conn   *sql.DB
-	logger *log.Logger
+	conn    *sql.DB
+	logger  *log.Logger
+	logFile *os.File
 }
 
 func NewDB(db *sql.DB) *Database {
-	return &Database{
-		conn:   db,
-		logger: log.New(os.Stdout, "[DB] ", log.LstdFlags|log.Lshortfile),
+	logFile, err := os.OpenFile("db.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Failed to open log file: %v", err)
+		return &Database{conn: db, logger: log.New(os.Stdout, "[DB] ", log.LstdFlags)}
 	}
+
+	return &Database{
+		conn:    db,
+		logger:  log.New(logFile, "[DB] ", log.LstdFlags|log.Lshortfile),
+		logFile: logFile,
+	}
+}
+
+func (db *Database) Close() error {
+	var err error
+	if db.conn != nil {
+		if closeErr := db.conn.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close DB connection: %w", closeErr)
+		}
+	}
+
+	if db.logFile != nil {
+		if closeErr := db.logFile.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("failed to close log file: %w", closeErr)
+		}
+	}
+	return err
 }
 
 // InitDB инициализирует подключение к базе данных
@@ -30,23 +54,23 @@ func InitDB() (*Database, error) {
 		return nil, fmt.Errorf("failed to get DB config: %w", err)
 	}
 
-	db, err := sql.Open("postgres", connStr) // Явно указать драйвер
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open DB connection: %w", err)
 	}
 
 	database := NewDB(db)
 	database.logger.Println("Initializing database connection")
-	// Проверка подключения
+
 	if err := db.Ping(); err != nil {
 		database.logger.Printf("Connection ping failed: %v", err)
-		database.conn.Close() // Закрыть соединение при ошибке
+		database.Close()
 		return nil, fmt.Errorf("failed to ping DB: %w", err)
 	}
 
 	if err := database.CreateIfNotExists(); err != nil {
 		database.logger.Printf("Failed to initialize tables: %v", err)
-		database.conn.Close()
+		database.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
@@ -107,17 +131,6 @@ func (db *Database) DeleteTables() error {
 
 	if _, err := db.conn.Exec(string(migration)); err != nil {
 		return fmt.Errorf("failed to execute delete script: %w", err)
-	}
-	return nil
-}
-
-// Close закрывает соединение с базой данных
-func (db *Database) Close() error {
-	if db.conn == nil {
-		return nil
-	}
-	if err := db.conn.Close(); err != nil {
-		return fmt.Errorf("failed to close DB connection: %w", err)
 	}
 	return nil
 }

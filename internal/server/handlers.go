@@ -1,86 +1,54 @@
 package server
 
-// import (
-// 	"context"
-// 	"net/http"
-// 	"strconv"
-// 	"strings"
-// 	"time"
+import (
+	"encoding/json"
+	"net/http"
+)
 
-// 	"wb_project_0/internal/database"
-// )
+func (s *Server) setupRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
 
-// func HomeHandler(db *database.Database) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	// API endpoint
+	mux.HandleFunc("/api/order/", s.orderHandler)
 
-// 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-// 		defer cancel()
+	// Главная страница
+	mux.HandleFunc("/", s.indexHandler)
 
-// 		if page < 1 {
-// 			page = 1
-// 		}
-// 		limit := 3
-// 		offset := (page - 1) * limit
+	return mux
+}
 
-// 		articles, err := db.GetArticles(ctx, limit, offset)
-// 		if err != nil {
-// 			if ctx.Err() == context.DeadlineExceeded {
-// 				http.Error(w, "Request timeout", http.StatusGatewayTimeout)
-// 				return
-// 			}
-// 			http.Error(w, "Database error", http.StatusInternalServerError)
-// 			return
-// 		}
+func (s *Server) indexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
 
-// 		renderTemplate(w, "templates/index.html", articles)
-// 	}
-// }
+	w.Header().Set("Content-Type", "text/html")
+	if err := s.frontend.RenderIndex(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 
-// func ArticleHandler(db *database.Database) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-// 		defer cancel()
+func (s *Server) orderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-// 		idStr := strings.TrimPrefix(r.URL.Path, "/article/")
-// 		id, err := strconv.Atoi(idStr)
-// 		if err != nil {
-// 			http.Error(w, "Invalid article ID", http.StatusBadRequest)
-// 			return
-// 		}
+	uid := r.URL.Path[len("/order/"):]
+	if uid == "" {
+		http.Error(w, "Order ID is required", http.StatusBadRequest)
+		return
+	}
 
-// 		article, err := db.GetArticleByID(ctx, id)
-// 		if err != nil {
-// 			if ctx.Err() == context.DeadlineExceeded {
-// 				http.Error(w, "Request timeout", http.StatusGatewayTimeout)
-// 				return
-// 			}
-// 			http.Error(w, "Article not found", http.StatusNotFound)
-// 			return
-// 		}
+	order, err := s.cache.Get(uid)
+	if err != nil {
+		http.Error(w, "Order not found", http.StatusNotFound)
+		return
+	}
 
-// 		renderTemplate(w, "templates/article.html", article)
-// 	}
-// }
-
-// func AdminHandler(db *database.Database) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-// 		defer cancel()
-
-// 		if r.Method == http.MethodPost {
-// 			title := r.FormValue("title")
-// 			content := r.FormValue("content")
-
-// 			_, err := db.InsertArticle(ctx, title, content)
-// 			if err != nil {
-// 				if ctx.Err() == context.DeadlineExceeded {
-// 					http.Error(w, "Request timeout", http.StatusGatewayTimeout)
-// 				}
-// 				http.Error(w, "Failed to save article", http.StatusInternalServerError)
-// 				return
-// 			}
-// 		}
-// 		renderTemplate(w, "templates/admin.html", nil)
-// 	}
-// }
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(order); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}

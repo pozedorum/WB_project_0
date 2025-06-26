@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Lookup</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #searchBox {
+            margin-bottom: 20px;
+        }
+        #orderId {
+            padding: 8px;
+            width: 300px;
+        }
+        button {
+            padding: 8px 16px;
+        }
+        #result {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Order Information</h1>
+    <div id="searchBox">
+        <input type="text" id="orderId" placeholder="Enter Order ID">
+        <button onclick="getOrder()">Get Order</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+    async function getOrder() {
+        const orderId = document.getElementById('orderId').value.trim();
+        const resultDiv = document.getElementById('result');
+        
+        if (!orderId) {
+            resultDiv.innerHTML = '<div class="error">Please enter Order ID</div>';
+            return;
+        }
+
+        resultDiv.innerHTML = '<div>Loading...</div>';
+        
+        try {
+            const response = await fetch(`/api/orders/${orderId}`);
+            
+            if (!response.ok) {
+                if (response.status === 404) {
+                    resultDiv.innerHTML = '<div class="error">Order not found</div>';
+                } else {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                return;
+            }
+            
+            const data = await response.json();
+            
+            // Проверка на пустой ответ
+            if (!data || !data.order_uid) {
+                resultDiv.innerHTML = '<div class="error">Order not found</div>';
+                return;
+            }
+            
+            // Форматируем вывод
+            let html = `
+                <h3>Order Info</h3>
+                <p><strong>Order UID:</strong> ${data.order_uid}</p>
+                <p><strong>Track Number:</strong> ${data.track_number}</p>
+                <p><strong>Date Created:</strong> ${new Date(data.date_created).toLocaleString()}</p>
+                
+                <h4>Delivery</h4>
+                <p><strong>Name:</strong> ${data.delivery.name}</p>
+                <p><strong>Address:</strong> ${data.delivery.address}, ${data.delivery.city}</p>
+                <p><strong>Phone:</strong> ${data.delivery.phone}</p>
+                
+                <h4>Payment</h4>
+                <p><strong>Amount:</strong> ${data.payment.amount} ${data.payment.currency}</p>
+                <p><strong>Provider:</strong> ${data.payment.provider}</p>
+            `;
+            
+            resultDiv.innerHTML = html;
+            
+        } catch (error) {
+            resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+        }
+    }
+    </script>
+</body>
+</html>

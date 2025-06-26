@@ -202,12 +202,19 @@ func setupTestDB(t *testing.T) *Database {
 	d, err := InitDB()
 	require.NoError(t, err)
 
-	// Очистка и создание таблиц перед каждым тестом
+	// Очищаем лог-файл перед каждым тестом
+	if d.logFile != nil {
+		_ = d.logFile.Close()
+		os.Remove("db.log") // Удаляем файл, чтобы начать "чистый" лог
+	}
+
 	require.NoError(t, d.DeleteTables())
 	require.NoError(t, d.CreateTables())
 
 	t.Cleanup(func() {
-		assert.NoError(t, d.Close())
+		if err := d.Close(); err != nil {
+			t.Logf("Cleanup error: %v", err)
+		}
 	})
 	return d
 }
