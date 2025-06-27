@@ -134,3 +134,9 @@ func (db *Database) DeleteTables() error {
 	}
 	return nil
 }
+
+//===================
+
+func (db *Database) GetLoggerToCache() (*log.Logger, *os.File) {
+	return db.logger, db.logFile
+}

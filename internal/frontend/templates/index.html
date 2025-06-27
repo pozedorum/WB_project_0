@@ -52,7 +52,7 @@
         resultDiv.innerHTML = '<div>Loading...</div>';
         
         try {
-            const response = await fetch(`/api/orders/${orderId}`);
+            const response = await fetch(`/api/order/${orderId}`);
             
             if (!response.ok) {
                 if (response.status === 404) {
@@ -78,12 +78,12 @@
                 <p><strong>Track Number:</strong> ${data.track_number}</p>
                 <p><strong>Date Created:</strong> ${new Date(data.date_created).toLocaleString()}</p>
                 
-                <h4>Delivery</h4>
+                <h4>Delivery:</h4>
                 <p><strong>Name:</strong> ${data.delivery.name}</p>
                 <p><strong>Address:</strong> ${data.delivery.address}, ${data.delivery.city}</p>
                 <p><strong>Phone:</strong> ${data.delivery.phone}</p>
                 
-                <h4>Payment</h4>
+                <h4>Payment:</h4>
                 <p><strong>Amount:</strong> ${data.payment.amount} ${data.payment.currency}</p>
                 <p><strong>Provider:</strong> ${data.payment.provider}</p>
             `;

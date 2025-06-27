@@ -118,7 +118,7 @@ func (s *Server) kafkaStub() {
 
 	// Генерируем тестовый заказ
 	testOrder := models.Order{
-		OrderUID:    "test123",
+		OrderUID:    "test124",
 		TrackNumber: "WBILMTESTTRACK",
 		Entry:       "WBIL",
 		Delivery: models.Delivery{
