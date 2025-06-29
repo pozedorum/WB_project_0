@@ -1,10 +1,43 @@
 package kafkaproducer
 
 import (
+	"context"
+	"encoding/json"
+	"log"
 	"strconv"
 	"time"
 	"wb_project_0/internal/models"
+
+	"github.com/segmentio/kafka-go"
 )
+
+func main() {
+	writer := &kafka.Writer{
+		Addr:     kafka.TCP("kafka:9092"),
+		Topic:    "orders",
+		Balancer: &kafka.Hash{},
+	}
+
+	for {
+		order := generateOrder() // Используйте вашу функцию генерации
+		msg, _ := json.Marshal(order)
+
+		err := writer.WriteMessages(context.Background(),
+			kafka.Message{
+				Key:   []byte(order.OrderUID),
+				Value: msg,
+			},
+		)
+
+		if err != nil {
+			log.Printf("Failed to send message: %v", err)
+		} else {
+			log.Printf("Sent order: %s", order.OrderUID)
+		}
+
+		time.Sleep(10 * time.Second) // Интервал отправки
+	}
+}
 
 func generateOrder() *models.Order {
 

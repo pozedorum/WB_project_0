@@ -1,6 +1,48 @@
 # version: '3.8'
 
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092" # Для подключения с хоста
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # Автосоздание топиков
+      KAFKA_NUM_PARTITIONS: 1                  # Количество партиций по умолчанию
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1      # Фактор репликации
+      KAFKA_CREATE_TOPICS: "orders:1:1"        # topics:partitions:replicas
+
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=WARN,kafka.producer.async.DefaultEventHandler=WARN,state.change.logger=WARN"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "ERROR"
+    
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    platform: linux/amd64
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BROKERS: "kafka:9092"
   # Основная БД
   postgres:
     image: postgres:15-alpine
@@ -25,11 +67,12 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      postgres:
-        condition: service_healthy
+      - kafka
+      - postgres
     environment:
       DB_URL: "postgres://test:test@postgres:5432/testdb?sslmode=disable"
-      USE_KAFKA_STUB: "true"
+      USE_KAFKA_STUB: "false"
+      KAFKA_BROKERS: "kafka:9092"
     ports:
       - "8081:8080"  # Пробрасываем внутренний 8080 на внешний 8081
     volumes:

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -30,6 +31,7 @@ func New(db *db.Database, kafkaBrokers []string, useKafkaStub bool) *Server {
 	s := &Server{}
 	logFile, err := os.OpenFile("server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
+		log.Printf("error with openning logfile: %v", err)
 		return nil
 	}
 	s.logFile = logFile
@@ -53,57 +55,38 @@ func New(db *db.Database, kafkaBrokers []string, useKafkaStub bool) *Server {
 		go s.kafkaStub()
 		s.logger.Printf("kafkaStub started")
 	} else if len(kafkaBrokers) > 0 {
-		s.reader = kafka.NewReader(kafka.ReaderConfig{
-			Brokers: kafkaBrokers,
-			Topic:   "orders",
-			GroupID: "order-service",
-		})
-		go s.consumeKafkaMessages()
+		s.setupKafkaConsumer()
 		s.logger.Printf("kafka started")
 	}
 
 	return s
 }
 
-func (s *Server) consumeKafkaMessages() {
-	for {
-		msg, err := s.reader.ReadMessage(context.Background())
-		if err != nil {
-			log.Printf("Kafka read error: %v", err)
-			continue
-		}
-
-		order, err := s.parseOrder(msg.Value)
-		if err != nil {
-			log.Printf("Parse error: %v", err)
-			continue
-		}
-
-		s.cache.Insert(*order)
-	}
-}
-
-func (s *Server) parseOrder(data []byte) (*models.Order, error) {
-	s.logger.Printf("start parsing order")
-	var order models.Order
-	if err := json.Unmarshal(data, &order); err != nil {
-		s.logger.Printf("error with parsing order")
-		return nil, err
-	}
-	return &order, nil
-}
-
 func (s *Server) Run(addr string) error {
+	if s == nil {
+		return errors.New("server is nil")
+	}
 	s.server = &http.Server{
 		Addr:    addr,
 		Handler: s.setupRoutes(), // Используем единый роутер
 	}
 
-	log.Printf("Starting server on %s", addr)
+	s.logger.Printf("Starting server on %s", addr)
 	return s.server.ListenAndServe()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.reader != nil {
+		if err := s.reader.Close(); err != nil {
+			log.Printf("Error closing Kafka reader: %v", err)
+		}
+	}
+	if s.logFile != nil {
+		err := s.logFile.Close()
+		log.Printf("Error closing logfile: %v", err)
+
+	}
+
 	if s.reader != nil {
 		if err := s.reader.Close(); err != nil {
 			log.Printf("Error closing Kafka reader: %v", err)
@@ -184,4 +167,33 @@ func (s *Server) kafkaStub() {
 	// for range ticker.C {
 	// 	// Можно генерировать новые тестовые заказы
 	// }
+}
+
+func (s *Server) setupKafkaConsumer() {
+	s.reader = kafka.NewReader(kafka.ReaderConfig{
+		Brokers:  []string{"kafka:9092"},
+		Topic:    "orders",
+		GroupID:  "order-service",
+		MinBytes: 10e3, //10 kb
+		MaxBytes: 10e6, //10 mb
+	})
+
+	go func() {
+		for {
+			msg, err := s.reader.ReadMessage(context.Background())
+			if err != nil {
+				s.logger.Printf("Kafka error: %v", err)
+				continue
+			}
+			s.logger.Printf("get new order: %s", msg.Key)
+			var order models.Order
+			if err := json.Unmarshal(msg.Value, &order); err != nil {
+				s.logger.Printf("Parse order error: %v", err)
+				continue
+			}
+
+			s.cache.Insert(order)
+			s.logger.Printf("Processed order: %s", order.OrderUID)
+		}
+	}()
 }
