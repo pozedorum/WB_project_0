@@ -1,46 +1,74 @@
 # version: '3.8'
+networks:
+  default:
+    name: kafka_network
+    driver: bridge
+
 
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.0.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kafka:
     image: confluentinc/cp-kafka:7.3.2
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
-      - "29092:29092" # Для подключения с хоста
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"  # Автосоздание топиков
-      KAFKA_NUM_PARTITIONS: 1                  # Количество партиций по умолчанию
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1      # Фактор репликации
-      KAFKA_CREATE_TOPICS: "orders:1:1"        # topics:partitions:replicas
-
-      KAFKA_LOG4J_LOGGERS: "kafka.controller=WARN,kafka.producer.async.DefaultEventHandler=WARN,state.change.logger=WARN"
-      KAFKA_LOG4J_ROOT_LOGLEVEL: "ERROR"
-    
+      KAFKA_CREATE_TOPICS: "orders:1:1"
     healthcheck:
-      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "localhost:9092"]
-      interval: 5s
-      timeout: 5s
+      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "kafka:9092"]
+      interval: 10s
+      timeout: 10s
       retries: 10
+    command: >
+      bash -c "
+        echo 'Waiting for Kafka to start...';
+        while ! nc -z localhost 9092; do sleep 1; done;
+        echo 'Kafka is ready! Creating topic "orders"...';
+        kafka-topics --create --if-not-exists \
+          --bootstrap-server localhost:9092 \
+          --topic orders \
+          --partitions 1 \
+          --replication-factor 1;
+        echo 'Topic "orders" created. Starting Kafka...';
+        /etc/confluent/docker/run;
+      "
 
   producer:
     build:
       context: .
       dockerfile: Dockerfile.producer
     platform: linux/amd64
+    command: >
+      bash -c "
+        echo 'Waiting for Kafka to be ready...';
+        while ! nc -z kafka 9092; do sleep 3; done;
+        echo 'Kafka is ready! Starting producer...';
+        ./producer
+      "
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_BROKERS: "kafka:9092"
   # Основная БД

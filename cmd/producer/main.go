@@ -1,8 +1,9 @@
-package kafkaproducer
+package main
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -12,6 +13,19 @@ import (
 )
 
 func main() {
+
+	// Ждём, пока Kafka станет доступной
+	fmt.Println("Waiting for Kafka to be ready...")
+	for {
+		conn, err := kafka.Dial("tcp", "kafka:9092")
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	fmt.Println("Kafka is ready!")
+
 	writer := &kafka.Writer{
 		Addr:     kafka.TCP("kafka:9092"),
 		Topic:    "orders",
