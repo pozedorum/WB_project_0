@@ -1,54 +1,72 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
 func main() {
 	broker := os.Getenv("KAFKA_BROKER")
-	topic := os.Getenv("KAFKA_TOPIC")
-
 	if broker == "" {
-		broker = "localhost:9092"
-	}
-	if topic == "" {
-		topic = "test-topic"
+		broker = "kafka:9092"
 	}
 
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers: []string{broker},
-		Topic:   topic,
-	})
-	defer writer.Close()
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 5
 
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
+	var producer sarama.SyncProducer
+	var err error
+
+	// Retry connection
+	for i := 0; i < 10; i++ {
+		producer, err = sarama.NewSyncProducer([]string{broker}, config)
+		if err == nil {
+			break
+		}
+		log.Printf("Connection attempt %d failed: %v\n", i+1, err)
+		time.Sleep(5 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to start producer: %v", err)
+	}
+	defer producer.Close()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	log.Println("Producer started. Press Ctrl+C to exit.")
 
 	for {
 		select {
-		case <-sigchan:
-			fmt.Println("Shutting down producer")
-			return
-		default:
-			msg := fmt.Sprintf("Hello World @ %v", time.Now())
-			err := writer.WriteMessages(context.Background(),
-				kafka.Message{
-					Value: []byte(msg),
-				},
-			)
-			if err != nil {
-				fmt.Printf("Produce failed: %v\n", err)
-			} else {
-				fmt.Printf("Produced: %s\n", msg)
+		case <-ticker.C:
+			msg := &sarama.ProducerMessage{
+				Topic: "test-topic",
+				Value: sarama.StringEncoder(fmt.Sprintf("Message at %s", time.Now().Format(time.RFC3339))),
 			}
-			time.Sleep(3 * time.Second)
+
+			partition, offset, err := producer.SendMessage(msg)
+			if err != nil {
+				log.Printf("Failed to send message: %v\n", err)
+				continue
+			}
+
+			log.Printf("Sent message to partition %d at offset %d\n", partition, offset)
+
+		case <-signals:
+			log.Println("Shutting down producer...")
+			return
 		}
 	}
 }

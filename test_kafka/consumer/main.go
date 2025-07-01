@@ -1,52 +1,64 @@
 package main
 
 import (
-	"context"
-	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/IBM/sarama"
 )
 
 func main() {
 	broker := os.Getenv("KAFKA_BROKER")
-	topic := os.Getenv("KAFKA_TOPIC")
-	groupID := os.Getenv("KAFKA_GROUP_ID")
-
 	if broker == "" {
-		broker = "localhost:9092"
-	}
-	if topic == "" {
-		topic = "test-topic"
-	}
-	if groupID == "" {
-		groupID = "test-group"
+		broker = "kafka:9092"
 	}
 
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{broker},
-		Topic:   topic,
-		GroupID: groupID,
-	})
-	defer reader.Close()
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
 
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
+	var consumer sarama.Consumer
+	var err error
+
+	// Retry connection
+	for i := 0; i < 10; i++ {
+		consumer, err = sarama.NewConsumer([]string{broker}, config)
+		if err == nil {
+			break
+		}
+		log.Printf("Connection attempt %d failed: %v\n", i+1, err)
+		time.Sleep(5 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to start consumer: %v", err)
+	}
+	defer consumer.Close()
+
+	partitionConsumer, err := consumer.ConsumePartition("test-topic", 0, sarama.OffsetNewest)
+	if err != nil {
+		log.Fatalf("Failed to start partition consumer: %v", err)
+	}
+	defer partitionConsumer.Close()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	log.Println("Consumer started. Press Ctrl+C to exit.")
 
 	for {
 		select {
-		case <-sigchan:
-			fmt.Println("Shutting down consumer")
+		case msg := <-partitionConsumer.Messages():
+			log.Printf("Received message: %s\n", string(msg.Value))
+
+		case err := <-partitionConsumer.Errors():
+			log.Printf("Error: %v\n", err)
+
+		case <-signals:
+			log.Println("Shutting down consumer...")
 			return
-		default:
-			msg, err := reader.ReadMessage(context.Background())
-			if err != nil {
-				fmt.Printf("Consumer error: %v\n", err)
-				continue
-			}
-			fmt.Printf("Received: %s\n", string(msg.Value))
 		}
 	}
 }
