@@ -1,6 +1,6 @@
 .PHONY: test-db-unit test-db-integration test-db-all up down clean
 
-# Запуск юнит-тестов (требует локальной БД)
+
 test-db-unit:
 	go test -v ./internal/db/... 
 
