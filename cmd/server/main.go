@@ -20,9 +20,9 @@ func main() {
 	}
 	defer db.Close()
 
-	kafkaBrokers := []string{"localhost:9092"}
+	kafkaBrokers := []string{"kafka:9092"}
 	// Создание сервера
-	srv := server.New(db, kafkaBrokers, true)
+	srv := server.New(db, kafkaBrokers, false)
 
 	// Запуск сервера в отдельной горутине
 	go func() {

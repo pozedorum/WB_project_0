@@ -3,22 +3,21 @@
 # Запуск юнит-тестов (требует локальной БД)
 test-db-unit:
 	go test -v ./internal/db/... 
-# -tags=unit
-# Запуск интеграционных тестов в Docker
-test-db-integration:
-	docker-compose up --build --exit-code-from dbtest
 
-# Запуск всех тестов
-test-db-all: test-db-unit test-db-integration
-
-# Запуск контейнеров для ручного тестирования
 up:
-	docker-compose up -d
+	docker-compose up --build
+	sleep 10  # Ждем инициализации Kafka
+	make create-topic
 
-# Остановка контейнеров
-down:
-	docker-compose down
+create-topic:
+	docker exec kafka_container kafka-topics --create \
+		--bootstrap-server kafka:9092 \
+		--replication-factor 1 \
+		--partitions 1 \
+		--topic orders
 
-# Очистка
-clean: down
-	docker volume rm order-service_pgdata
+list-topics:
+	docker exec kafka kafka-topics --list --bootstrap-server localhost:9092
+
+describe-topic:
+	docker exec kafka kafka-topics --describe --bootstrap-server localhost:9092 --topic orders

@@ -8,6 +8,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.3.2
+    container_name: kafka_container
     depends_on:
       - zookeeper
     ports:

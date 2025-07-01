@@ -1,4 +1,4 @@
-package kafkaproducer
+package main
 
 import (
 	"context"
