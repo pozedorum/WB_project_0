@@ -68,7 +68,7 @@ func (s *Server) Run(addr string) error {
 	}
 	s.server = &http.Server{
 		Addr:    addr,
-		Handler: s.setupRoutes(), // Используем единый роутер
+		Handler: s.setupRoutes(),
 	}
 
 	s.logger.Printf("Starting server on %s", addr)
@@ -159,14 +159,6 @@ func (s *Server) kafkaStub() {
 	// Имитируем получение сообщения из Kafka
 	s.cache.Insert(testOrder)
 	log.Printf("Inserted test order with ID: %s", testOrder.OrderUID)
-
-	// // Периодически добавляем тестовые данные (по желанию)
-	// ticker := time.NewTicker(30 * time.Second)
-	// defer ticker.Stop()
-
-	// for range ticker.C {
-	// 	// Можно генерировать новые тестовые заказы
-	// }
 }
 
 func (s *Server) setupKafkaConsumer() {

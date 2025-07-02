@@ -9,6 +9,7 @@ import (
 	"wb_project_0/internal/models"
 )
 
+// Тут закоменчены логи базы даных, так как их было очень много, оставил их на случай надобности
 func (db *Database) SaveOrder(ctx context.Context, order models.Order) error {
 	//db.logger.Printf("Saving order %s", order.OrderUID)
 	tx, err := db.conn.BeginTx(ctx, nil)

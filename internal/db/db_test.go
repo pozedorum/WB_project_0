@@ -205,7 +205,7 @@ func setupTestDB(t *testing.T) *Database {
 	// Очищаем лог-файл перед каждым тестом
 	if d.logFile != nil {
 		_ = d.logFile.Close()
-		os.Remove("db.log") // Удаляем файл, чтобы начать "чистый" лог
+		os.Remove("db.log")
 	}
 
 	require.NoError(t, d.DeleteTables())

@@ -81,7 +81,7 @@ func (c *Cache) Get(uid string) (models.Order, error) {
 		return models.Order{}, err
 	}
 	c.logger.Printf("order with uid:%s recieved from BD", uid)
-	err = c.Insert(*orderPtr) // Добавляем в кэш
+	err = c.Insert(*orderPtr)
 	if err != nil {
 		c.logger.Printf("error: cache failed to insert order %s", uid)
 	}

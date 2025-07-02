@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	// Инициализация зависимостей
+
 	db, err := db.InitDB()
 	if err != nil {
 		log.Fatal(err)
@@ -21,7 +21,7 @@ func main() {
 	defer db.Close()
 
 	kafkaBrokers := []string{"kafka:9092"}
-	// Создание сервера
+
 	srv := server.New(db, kafkaBrokers, false)
 
 	// Запуск сервера в отдельной горутине

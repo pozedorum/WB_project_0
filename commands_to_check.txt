@@ -1,0 +1,11 @@
+Запуск и проверка
+    docker-compose down -v --remove-orphans 
+    make up
+    curl http://localhost:8081/api/order/test165
+    docker-compose ps
+Подключение к sql в докере и проверка таблиц
+    docker-compose exec postgres psql -U test -d testdb
+    \dt
+     SELECT order_uid FROM orders;
+Проверка списка топиков Kafka
+     docker-compose exec kafka kafka-topics --list --bootstrap-server kafka:9092

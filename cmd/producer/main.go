@@ -19,7 +19,7 @@ func main() {
 	}
 
 	for {
-		order := generateOrder() // Используйте вашу функцию генерации
+		order := generateOrder()
 		msg, _ := json.Marshal(order)
 
 		err := writer.WriteMessages(context.Background(),

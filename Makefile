@@ -1,13 +1,15 @@
-.PHONY: test-db-unit test-db-integration test-db-all up down clean
 
 # Запуск юнит-тестов (требует локальной БД)
-test-db-unit:
-	go test -v ./internal/db/... 
+# test-db-unit:
+# 	go test -v ./internal/db/... 
 
 up:
 	docker-compose up --build
 	sleep 10  # Ждем инициализации Kafka
 	make create-topic
+
+down:
+	docker-compose down -v --remove-orphans
 
 create-topic:
 	docker exec kafka_container kafka-topics --create \

@@ -19,14 +19,13 @@ var (
 func GetDBConf() (string, error) {
 
 	log.Printf("Trying to read config from: %s", path)
-	// Проверяем переменные окружения в первую очередь
+
 	if url := os.Getenv("DB_URL"); url != "" {
 		return url, nil
 	}
 
 	content, err := os.ReadFile(path)
 	if err == nil {
-		// Парсим конфиг...
 		return parseConfig(string(content))
 	}
 
